@@ -22,9 +22,8 @@ class AFN:
                 ('-' * 100)
                 ).format(self.states, self.symbols, self.transitions, self.initial, self.final)
 
-    #/-------------------------------Funciones para manejar el stack de la clase AFN-------------------------------/
-    #/-------------------------------Funciones para manejar el stack de la clase AFN-------------------------------/
-    #/-------------------------------Funciones para manejar el stack de la clase AFN-------------------------------/
+#***************************************************************************
+#Manejo AFN class
     def is_empty(self):
         return len(self.stack) == 0
     def last(self):
@@ -36,10 +35,8 @@ class AFN:
             BaseException("Error")
     def push(self, op):
         self.stack.append(op)
-
-    #/-------------------------------Funciones para generar el AFN-------------------------------/
-    #/-------------------------------Funciones para generar el AFN-------------------------------/
-    #/-------------------------------Funciones para generar el AFN-------------------------------/
+#***************************************************************************
+#Funcs create nfa
     def processTokens(self, symbol, i):
         self.transitions[(i, i+1)] = symbol
         self.push(i)
@@ -87,9 +84,8 @@ class AFN:
     def processOptional(self, i):
         return self.processOr(self.processTokens(epsilon, i))
 
-    #/-------------------------------Generar el AFN-------------------------------/
-    #/-------------------------------Generar el AFN-------------------------------/
-    #/-------------------------------Generar el AFN-------------------------------/
+#***************************************************************************
+#funcs generate NFA
     def genNFA(self, root: Node, i=0):
         if root:
             i = self.genNFA(root.left, i)
@@ -157,9 +153,8 @@ class AFN:
         (graph,) = pydot.graph_from_dot_file('Graphs/AFN.dot')
         graph.write_png('Graphs/AFN.png')
 
-    # /-------------------------------Simulacion del AFN-------------------------------/
-    # /-------------------------------Simulacion del AFN-------------------------------/
-    # /-------------------------------Simulacion del AFN-------------------------------/
+#***************************************************************************
+#Functions simulate NFA
     def epsilon_closure(self, states):
         closure = set(states)
         stack = list(states)

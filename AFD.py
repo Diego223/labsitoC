@@ -1,23 +1,35 @@
 from collections import deque
+from Functions import *
 from AFN import *
 from keys import *
 from Node import Node
+import graphviz
 
 class AFD:
-    def __init__(self, symbols):
-        self.nfa = None
-        self.tree = None
-        self.states = None
-        self.state_id_mapping = {}
-        self.symbols = symbols
-        self.transitions = {}
-        self.initial = None
-        self.final = None
-        self.state_count = 0
+    def __init__(self, symbols=None, tree:ExpressionTree = None, nfa:AFN = None):
+        if tree != None:
+            self.tree =tree
+            self.nullable = self.tree.nullable
+            self.firstpos = self.tree.firstpos
+            self.lastpos = self.tree.lastpos
+            self.nextpos = self.tree.nextpos
+            self.nodes = self.tree.nodes
+            self.symbols = self.tree.symbols
+            self.states = []
+            self.transition_table = {}
+            self.final_states = set()
+            self.build_dfa()
+        if nfa != None and symbols != None:
+            self.nfa = nfa
+            self.states = None
+            self.state_id_mapping = {}
+            self.symbols = symbols
+            self.transitions = {}
+            self.initial = None
+            self.final = None
+            self.state_count = 0
 
-    # /-------------------------------NFA to DFA por subconjuntos-------------------------------/
-    # /-------------------------------NFA to DFA por subconjuntos-------------------------------/
-    # /-------------------------------NFA to DFA por subconjuntos-------------------------------/
+#***************************************************************************
     def e_closure(self, states):
         closure = set(states)
         stack = list(states)
@@ -67,45 +79,53 @@ class AFD:
         self.initial = frozenset(self.e_closure({self.nfa.initial}))
         self.final = [state_set for state_set in dfa_states if self.nfa.final in state_set]
 
-    # /-------------------------------postfix to DFA-------------------------------/
-    # /-------------------------------postfix to DFA-------------------------------/
-    # /-------------------------------postfix to DFA-------------------------------/
-    def get_next_state(self, state_set, symbol):
-        next_positions = set()
-        for position in state_set:
-            if self.tree.search_by_id(position) == symbol:
-                next_positions |= set(self.tree.nextpos[position])
-        return next_positions
 
-    def generate_state_id(self):
-        state_id = self.state_count
-        self.state_count += 1
-        return state_id
+#***************************************************************************
+    def closure(self, positions):
+        result = set(positions)
+        for pos in positions:
+            if self.nodes[pos] == epsilon:
+                result |= self.closure(self.nextpos[pos])
+        return result
 
-    def directBuild(self, tree):
-        self.tree = tree
-        start_state = frozenset(self.tree.firstpos[self.tree.tree.id])
-        self.initial = start_state
-        unmarked_states = [start_state]
-        self.states = {start_state}
-        self.state_id_mapping[start_state] = self.generate_state_id()
+    def build_dfa(self):
+        initial_state = frozenset(self.closure(self.firstpos[self.tree.tree.id]))
+        unmarked_states = [initial_state]
+        self.states.append(initial_state)
+        self.transition_table[initial_state] = {}
         while unmarked_states:
             current_state = unmarked_states.pop()
-            for symbol in self.tree.symbols:
-                next_state = frozenset(self.get_next_state(current_state, symbol))
-                if next_state:
-                    if next_state not in self.states:
-                        unmarked_states.append(next_state)
-                        self.states.add(next_state)
-                        self.state_id_mapping[next_state] = self.generate_state_id()
-                    if current_state not in self.transitions:
-                        self.transitions[current_state] = {}
-                    self.transitions[current_state][symbol] = next_state
-        self.final = {state for state in self.states if self.tree.tree.id in state}
+            for symbol in self.symbols:
+                next_positions = set()
+                for pos in current_state:
+                    if self.nodes[pos] == symbol:
+                        next_positions |= set(self.nextpos[pos])  # Convert list to set before union operation
+                next_positions_closure = frozenset(self.closure(next_positions))
+                if not next_positions_closure:
+                    continue
+                if next_positions_closure not in self.states:
+                    self.states.append(next_positions_closure)
+                    unmarked_states.append(next_positions_closure)
+                    self.transition_table[next_positions_closure] = {}
+                self.transition_table[current_state][symbol] = next_positions_closure
+        hash_position = self.tree.tree.right.id
+        for state in self.states:
+            if hash_position in state:
+                self.final_states.add(state)
 
-    # /-------------------------------Minimizacion de DFA-------------------------------/
-    # /-------------------------------Minimizacion de DFA-------------------------------/
-    # /-------------------------------Minimizacion de DFA-------------------------------/
+    def simulate(self, input_string):
+        input_string = replace_reserved_words(input_string)
+        current_state = self.states[0]
+        for symbol in input_string:
+            if symbol not in self.symbols:
+                return False
+            next_state = self.transition_table[current_state].get(symbol)
+            if not next_state:
+                return False
+            current_state = next_state
+        return current_state in self.final_states
+
+#***************************************************************************
     def minimize(self):
         part = [item for item in self.states if item not in self.final]
         partitions = [part, self.final]
@@ -155,10 +175,64 @@ class AFD:
                     new_trans[i][symbol] = target
         self.transitions = new_trans
 
-    # /-------------------------------Funcion para mostrar AFD-------------------------------/
-    # /-------------------------------Funcion para mostrar AFD-------------------------------/
-    # /-------------------------------Funcion para mostrar AFD-------------------------------/
-    def printDFA(self):
+    def simulate_subsets(self, input_string):
+        current_state = frozenset(self.initial)
+        for symbol in input_string:
+            if symbol not in self.symbols:
+                return False
+            if current_state not in self.transitions or symbol not in self.transitions[current_state]:
+                return False
+            current_state = self.transitions[current_state][symbol]
+        for final_state_set in self.final:
+            if current_state.issubset(final_state_set):
+                return True
+        return False
+
+    def simulate_direct(self, input_string):
+        input_string = replace_reserved_words(input_string)
+        current_state = self.states[0]
+        for symbol in input_string:
+            if symbol not in self.symbols:
+                return False
+            next_state = self.transition_table[current_state].get(symbol)
+            if not next_state:
+                return False
+            current_state = next_state
+        return current_state in self.final_states
+
+    def scanner(self, input_string):
+        input_string = replace_reserved_words(input_string)
+        idx = 0
+        results = []  # List to store all the matching substrings with their positions
+        while idx < len(input_string):
+            current_state = self.states[0]
+            temp_idx = idx
+            success = False
+            matched_string = ""
+            while temp_idx < len(input_string):
+                symbol = input_string[temp_idx]
+                if symbol not in self.symbols:
+                    temp_idx += 1
+                    continue
+                next_state = self.transition_table[current_state].get(symbol)
+                if not next_state:
+                    break
+                current_state = next_state
+                temp_idx += 1
+                if current_state in self.final_states:
+                    success = True
+                    matched_string = input_string[idx:temp_idx]
+            if success:
+                string = return_reserved_words(matched_string)
+                results.append((string, idx, temp_idx - 1))  # Append the match and its positions to the results list
+                idx = temp_idx  # Update the index to continue scanning from the next character
+            else:
+                idx += 1
+        return results
+
+
+#***************************************************************************
+    def printSubsets(self):
         print("DFA Summary:")
         print("States:")
         for state_set in self.states:
@@ -180,7 +254,7 @@ class AFD:
                 target_state_id = self.state_id_mapping[frozenset(target_state_set)]
                 print(f"  {state_id} --({symbol})--> {target_state_id}")
 
-    def showDFA(self):
+    def showSubsets(self):
         with open('Graphs/AFD.dot', 'w', encoding='utf-8') as file:
             file.write('digraph{\n')
             file.write('rankdir=LR\n')
@@ -217,9 +291,37 @@ class AFD:
         (graph,) = pydot.graph_from_dot_file('Graphs/AFD.dot')
         graph.write_png('Graphs/AFD.png')
 
-    # /-------------------------------Simulacion del AFD-------------------------------/
-    # /-------------------------------Simulacion del AFD-------------------------------/
-    # /-------------------------------Simulacion del AFD-------------------------------/
+    def print_direct(self):
+        print("States:")
+        for i, state in enumerate(self.states):
+            print(f"State {i}: {state}")
+        print("\nFinal States:")
+        for state in self.final_states:
+            print(state)
+        print("\nTransition Table:")
+        for state, transitions in self.transition_table.items():
+            for symbol, next_state in transitions.items():
+                print(f"{state} -- {symbol} --> {next_state}")
+
+def showDirect(dfa: AFD, output_filename: str = 'DFADirect'):
+    dot = graphviz.Digraph(format='dot', engine='dot')
+    dot.graph_attr['rankdir'] = 'LR'
+    dot.node_attr.update(shape='circle', fixedsize='true', width='1', height='1')
+
+    start_state = dfa.states[0]
+    dot.node(str(dfa.states.index(start_state)), label='', shape='none', width='0', height='0')
+    dot.edge('', str(dfa.states.index(start_state)), label='', arrowhead='none')
+    for final_state in dfa.final_states:
+        dot.node(str(dfa.states.index(final_state)), peripheries='2')
+    for state, transitions in dfa.transition_table.items():
+        state_idx = dfa.states.index(state)
+        for symbol, next_state in transitions.items():
+            next_state_idx = dfa.states.index(next_state)
+            dot.edge(str(state_idx), str(next_state_idx), label=symbol)
+    dot.render(output_filename, view=False)
+    dot.save(output_filename + '.dot')
+
+#**************************************************AFD SIMULATION
     def simulate_dfa(self, input_string):
         current_state = frozenset(self.initial)
         for symbol in input_string:
@@ -232,3 +334,41 @@ class AFD:
             if current_state.issubset(final_state_set):
                 return True
         return False
+
+    def simulate_direct(self, input_string):
+            input_string = replace_reserved_words(input_string)
+            current_state = self.states[0]
+            for symbol in input_string:
+                if symbol not in self.symbols:
+                    return False
+                next_state = self.transition_table[current_state].get(symbol)
+                if not next_state:
+                    return False
+                current_state = next_state
+            return current_state in self.final_states
+
+    def scanner(self, input_string):
+        input_string = replace_reserved_words(input_string)
+        idx = 0
+        while idx < len(input_string):
+            current_state = self.states[0]
+            temp_idx = idx
+            success = False
+            while temp_idx < len(input_string):
+                symbol = input_string[temp_idx]
+                if symbol not in self.symbols:
+                    temp_idx += 1
+                    continue
+                next_state = self.transition_table[current_state].get(symbol)
+                if not next_state:
+                    break
+                current_state = next_state
+                temp_idx += 1
+                if current_state in self.final_states:
+                    success = True
+                    break
+            if success:
+                string = return_reserved_words(input_string[idx:temp_idx])
+                return string, idx, temp_idx - 1
+            idx += 1
+        return None, -1, -1

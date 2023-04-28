@@ -1,0 +1,45 @@
+(a|b)*(b|a)*abb
+    Cadenas:
+    bbabb, si
+    babb, si
+    aaaaaaaaaabbbbbbabababababababababababababbb, no
+    abb, si
+
+((ε|a)b*)*
+    Cadenas:
+    , si
+    a, si
+    aba, si
+    abba, si
+
+(.|;)*-/.(.|;)*
+    Cadenas:
+    .;-/. , si
+    -/..; , si
+    -/. , si
+    ;;;;;;;......;.;.;.;.;.;.;./.;.;.;.;.; , no
+
+(x|t)+((a|m)?)+
+    Cadenas:
+        x, si
+        txm, si
+        ma, no
+        a, no
+
+("(.(;(.;(.|;)+)*)*)*)
+    Cadenas:
+    ".;.;. , si
+    ".;.;;. , si
+    ".;.; , si
+    ".;;. , no
+
+'{' return (A-Z)+ '}'
+    { return ID }, si
+    { return PLUS }, si
+    { return TIMES }, si
+    { return LPAREN }, si
+    { return RPAREN }, si
+    { return Rparen }, no
+
+'('* (A-Z)(a-z)+ ((a-z)+((, )| ))∗*')'
+      | id        { return ID }               (* Cambie por una accion valida, que devuelva el token *), si?
